@@ -1,0 +1,174 @@
+# medtrics-qa-automation — scenario-matrix
+#
+# Pattern-matched deterministic rules. A rule fires when ALL of its `match`
+# clauses are satisfied against the Optimus ticket + GitLab diff. When a rule
+# fires, the dispatcher runs every scenario inside it, applies every
+# assertion, and emits a per-scenario pass | fail | needs_human verdict.
+#
+# Rules are tried in declared order. The first match wins. If no rule
+# matches, the run is marked `needs_human` and falls back to the
+# sk-manual-qa checklist as the human paper trail. NO LLM fallback at
+# execution time.
+#
+# Schema (v1):
+#   match:
+#     title_contains:        list[str]  any-of, case-insensitive substring
+#     title_regex:           list[str]  any-of, case-insensitive regex
+#     files_changed_glob:    list[str]  any-of, glob against MR diff paths
+#     ticket_type:           list[str]  any-of, e.g. ["bug"]
+#   scenarios:
+#     - id:                  str        scenario-{kebab}
+#       priority:            P0 | P1 | P2
+#       action:
+#         kind:              fetch | navigate | upload_and_verify
+#         url_template:      str        templated path
+#         method:            GET | POST  default GET
+#         credentials:       include   default include (inherits session)
+#         for_each:          dict[str,list]  cartesian over template vars
+#       assertions:          list[Assertion]
+#   negative_tests:          list[NegativeTest]   self-check before scoring
+#
+# Assertion kinds (closed vocabulary — execution is deterministic):
+#   utf8_bom_present
+#   no_mojibake                     patterns: list[str]
+#   status_2xx
+#   status_eq                       value: int
+#   header_eq                       name: str, value: str
+#   body_contains                   patterns: list[str]
+#   body_not_contains               patterns: list[str]
+#   schema_matches                  columns: list[str]  ordered, header line
+#   byte_length_gte                 value: int
+#
+# NegativeTest schema:
+#   id:                str
+#   fixture:           path relative to plugin root
+#   apply:             which assertion(s) to dry-run against the fixture
+#   expected_verdict:  fail              (must fail — proves scanner works)
+
+version: 1
+
+rules:
+
+  - name: import_template_encoding
+    description: >
+      Bug class: CSV import templates render with mojibake characters
+      (Ã, Â, etc.) instead of UTF-8 punctuation. Code path is
+      curriculum.data_import.export.template. Verified manually on
+      M1-1129 / MR !6848 for Courses & Rotations.
+    match:
+      title_contains:
+        - "encod"
+        - "garbled"
+        - "mojibake"
+        - "ÃÂ"
+        - "characters render"
+        - "csv template"
+        - "template export"
+      files_changed_glob:
+        - "**/imports/**"
+        - "**/data_import/**"
+        - "**/exports/template/**"
+        - "**/serializers/**csv**"
+        - "**/curriculum/**csv**"
+      ticket_type:
+        - "bug"
+
+    scenarios:
+      - id: scenario-import-template-encoding-no-context
+        priority: P0
+        action:
+          kind: fetch
+          method: GET
+          url_template: "/api/v2/data_import/export/template/?content_type={content_type}"
+          credentials: include
+          # Canonical no-context slug list — verified end-to-end against MR
+          # 6848 on 2026-05-28. These are the 8 of 18 entries in
+          # validation_registry that render a template without requiring
+          # additional query params (e.g. academic_period_id). The
+          # remaining 10 are listed in `context_required_slugs` below and
+          # need a separate scenario with a context-provisioning step.
+          # Spellings reflect the codebase: `curriculumcourcerotation` and
+          # `sessioncourcerotation` carry historical typos and are
+          # intentional. Source of truth:
+          # src/apps/data_import/services/validation_configs.py
+          for_each:
+            content_type:
+              - curriculum.curriculumcourcerotation   # Courses & Rotations
+              - curriculum.sessioncourcerotation       # Sessions (typo intentional)
+              - curriculum.sessionschedule             # Schedule
+              - curriculum.keyword                     # Keywords
+              - curriculum.sessionattachment           # Session attachments
+              - users.group                            # User groups
+              - gradebook.gradedcourserotation         # Graded course rotations
+              - authentication.user                    # Users
+        assertions:
+          - kind: status_2xx
+          - kind: utf8_bom_present
+          - kind: no_mojibake
+            patterns: ["Ã", "Â", "·", "î", "ÃÂ", "�"]
+          - kind: byte_length_gte
+            value: 100
+
+    # Slugs that require academic_period_id / program_id / similar context.
+    # These need a separate scenario that first calls a context-provisioning
+    # endpoint (e.g. /api/v2/academic_periods/?current=true) and threads the
+    # ID into url_template. NOT YET IMPLEMENTED — scenarios that touch these
+    # slugs should return needs_human until the context recipe is added.
+    context_required_slugs:
+      - curriculum.objective.global
+      - curriculum.objective.program
+      - curriculum.objective.course
+      - curriculum.objective.session
+      - curriculum.sessionlearningmethod.instructional
+      - curriculum.sessionlearningmethod.assessment
+      - curriculum.sessionlearningmethod.resource
+      - curriculum.objective.mapping-program-to-course
+      - curriculum.objective.mapping-course-to-session
+      - curriculum.objective.mapping-global-to-program
+
+    negative_tests:
+      - id: scenario-negative-mojibake-injection
+        fixture: tests/fixtures/mojibake-corpus.csv
+        apply: [no_mojibake, utf8_bom_present]
+        expected_verdict: fail
+
+# ──────────────────────────────────────────────────────────────────────────
+# Stub rules for the next two bug classes. Not active until populated.
+# ──────────────────────────────────────────────────────────────────────────
+
+  - name: missing_required_field
+    disabled: true   # GAP-3: empty scenarios — pattern matches but produces no
+                     # assertions, leading to a phantom 'pass' verdict. Skipped
+                     # in match_rule until populated.
+    description: >
+      Bug class: serializer or form raises ValidationError that bubbles up as
+      500 instead of a 4xx with a non_field_errors body.
+    match:
+      title_contains:
+        - "missing"
+        - "required field"
+        - "non_field_errors"
+      files_changed_glob:
+        - "**/serializers/**"
+        - "**/forms/**"
+        - "**/validators/**"
+    scenarios: []   # TODO: fill from next confirmed ticket of this class
+    negative_tests: []
+
+  - name: role_permission_regression
+    disabled: true   # GAP-3: see missing_required_field above.
+    description: >
+      Bug class: a role that should have access to a page returns 403, or a
+      role that should be blocked returns 200.
+    match:
+      title_contains:
+        - "permission"
+        - "403"
+        - "access denied"
+        - "role"
+      files_changed_glob:
+        - "**/permissions/**"
+        - "**/decorators/**"
+        - "**/views/**"
+    scenarios: []   # TODO
+    negative_tests: []

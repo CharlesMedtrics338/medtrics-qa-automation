@@ -1,0 +1,13 @@
+# medtrics-qa-automation — development / test dependencies
+#
+# Includes everything in requirements.txt plus the test runner.
+#
+# Install (from the plugin root):
+#   pip install -r requirements-dev.txt
+#
+# Run tests:
+#   pytest          # discovers skills/*/tests/ via pytest.ini
+
+-r requirements.txt
+
+pytest>=7.0

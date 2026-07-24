@@ -1,0 +1,394 @@
+<!--
+  medtrics-qa-automation — qa1-queue-dashboard
+
+  This file is the Cowork Live Artifact's HTML document. It is composed by
+  qa-queue/scripts/build_dashboard_widget.py at create-artifact time, with
+  the following placeholders substituted (string-replace, not Jinja):
+
+    {{OPTIMUS_LIST_LANE_TASKS_TOOL}}  — full MCP tool name for list_lane_tasks
+    {{MEM_LIST_NOTES_TOOL}}            — full MCP tool name for list_notes
+    {{MEM_RUN_LOGS_COLLECTION_ID}}     — UUID of the QA Run Logs collection
+    {{OPTIMUS_PRODUCT}}                — product slug, e.g. "medtrics"
+    {{OPTIMUS_QA1_LANE}}               — lane slug, e.g. "qa1"
+    {{COWORK_DASHBOARD_TITLE}}         — page title
+
+  Runtime contract (from Cowork's Live Artifact system):
+    window.cowork.callMcpTool(name, args) — returns a Promise of the MCP result.
+    The result shape may be (a) the structured payload directly, (b) the
+    `{ content: [{type:"text", text:"..."}], structuredContent, isError }`
+    wrapper, or (c) a JSON string. unwrapMcp() handles all three.
+
+  Storage:
+    localStorage["qa1-dashboard:reviewerFilter"] — persists per-user, per-machine.
+
+  No external dependencies. No build step. Self-contained.
+-->
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>{{COWORK_DASHBOARD_TITLE}}</title>
+<style>
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+body, html { background: #ffffff; color: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; margin: 0; padding: 0; }
+.qa-root { padding: 18px; max-width: 1100px; margin: 0 auto; }
+.qa-masthead { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 12px; border-bottom: 1px solid #e6e8eb; margin-bottom: 16px; }
+.qa-title { font-size: 20px; font-weight: 500; letter-spacing: -0.01em; color: #1a1a1a; }
+.qa-wordmark { color: #7a7e85; font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+.qa-toolbar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.qa-toolbar select { background: #ffffff; color: #1a1a1a; border: 1px solid #d0d4d9; border-radius: 6px; padding: 5px 10px; font-size: 13px; }
+.qa-toolbar label { color: #5a5e64; font-size: 12px; }
+.qa-toolbar button { background: #ffffff; color: #1a1a1a; border: 1px solid #d0d4d9; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; }
+.qa-toolbar button:hover { background: #f5f6f8; }
+.qa-stats { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+.qa-chip { background: #f5f6f8; border: 1px solid #e6e8eb; border-radius: 999px; padding: 3px 11px; font-size: 11px; color: #5a5e64; }
+.qa-chip strong { color: #1a1a1a; font-weight: 500; margin-left: 4px; }
+.qa-chip.state-in_progress strong { color: #1f6feb; }
+.qa-chip.state-queued strong { color: #5a5e64; }
+.qa-chip.state-failed strong { color: #cf222e; }
+.qa-chip.state-blocked strong { color: #9a6700; }
+.qa-chip.state-passed strong { color: #1f883d; }
+.qa-section { margin-bottom: 18px; }
+.qa-section-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.qa-section-h h2 { font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em; color: #7a7e85; margin: 0; }
+.qa-section-h .count { color: #9aa0a8; font-size: 11px; }
+.qa-card { display: grid; grid-template-columns: 1fr auto; gap: 16px; background: #ffffff; border: 1px solid #e6e8eb; border-radius: 8px; padding: 12px 14px; margin-bottom: 6px; }
+.qa-card-left { min-width: 0; }
+.qa-card-right { text-align: right; min-width: 140px; }
+.qa-ticket-line { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; margin-bottom: 4px; }
+.qa-ticket-line a { color: #1f6feb; text-decoration: none; }
+.qa-ticket-line a:hover { text-decoration: underline; }
+.qa-title-text { font-size: 13px; font-weight: 500; margin-bottom: 6px; line-height: 1.35; color: #1a1a1a; }
+.qa-badges { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; }
+.qa-badge { background: #f5f6f8; border: 1px solid #e6e8eb; border-radius: 4px; padding: 1px 7px; font-size: 10px; color: #5a5e64; }
+.qa-badge.high-risk { color: #cf222e; border-color: #f7c1c1; background: #fef0f0; }
+.qa-badge.no-run { color: #9a6700; border-color: #fac775; background: #fff9eb; }
+.qa-summary { color: #5a5e64; font-size: 12px; line-height: 1.45; }
+.qa-meta { color: #9aa0a8; font-size: 10px; margin-top: 5px; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.qa-score { font-size: 22px; font-weight: 500; line-height: 1; color: #1a1a1a; }
+.qa-score-label { font-size: 9px; color: #9aa0a8; text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+.qa-mix { display: flex; gap: 3px; margin-top: 8px; justify-content: flex-end; font-size: 10px; color: #5a5e64; font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.qa-mix span { background: #f5f6f8; border-radius: 3px; padding: 1px 5px; }
+.qa-verdict { margin-top: 6px; font-size: 10px; font-family: ui-monospace, "SF Mono", Menlo, monospace; color: #5a5e64; }
+.qa-blocked-reason { color: #9a6700; font-size: 10px; margin-top: 4px; }
+.qa-banner { padding: 10px 14px; border-radius: 8px; margin-bottom: 14px; font-size: 12px; }
+.qa-banner.error { background: #fef0f0; border: 1px solid #f7c1c1; color: #cf222e; }
+.qa-banner.warn  { background: #fff9eb; border: 1px solid #fac775; color: #9a6700; }
+.qa-banner.info  { background: #eef6fb; border: 1px solid #b5d4f4; color: #1f6feb; }
+.qa-loading { color: #7a7e85; font-size: 13px; padding: 24px; text-align: center; }
+.qa-empty { color: #7a7e85; font-size: 13px; padding: 20px; text-align: center; border: 1px dashed #e6e8eb; border-radius: 8px; }
+</style>
+</head>
+<body>
+
+<div class="qa-root">
+
+  <div class="qa-masthead">
+    <div>
+      <div class="qa-title">{{COWORK_DASHBOARD_TITLE}}</div>
+      <div class="qa-wordmark">{ medtrics } · {{OPTIMUS_QA1_LANE}} lane · id=qa1-queue-dashboard</div>
+    </div>
+    <div class="qa-toolbar">
+      <label>Reviewer
+        <select id="qa-reviewer-filter">
+          <option value="">All</option>
+        </select>
+      </label>
+      <button id="qa-refresh">Refresh</button>
+      <span id="qa-updated" class="qa-wordmark"></span>
+    </div>
+  </div>
+
+  <div id="qa-banners"></div>
+  <div id="qa-stats" class="qa-stats"></div>
+  <div id="qa-body"><div class="qa-loading">Loading queue…</div></div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var CONFIG = {
+    optimusListLaneTasksTool: "{{OPTIMUS_LIST_LANE_TASKS_TOOL}}",
+    memListNotesTool:         "{{MEM_LIST_NOTES_TOOL}}",
+    memRunLogsCollectionId:   "{{MEM_RUN_LOGS_COLLECTION_ID}}",
+    optimusProduct:           "{{OPTIMUS_PRODUCT}}",
+    optimusQa1Lane:           "{{OPTIMUS_QA1_LANE}}",
+  };
+
+  var STATE_ORDER = ["in_progress", "queued", "failed", "blocked", "passed"];
+  var STATE_LABEL = {
+    in_progress: "In progress", queued: "Queued", failed: "Failed",
+    blocked: "Blocked", passed: "Passed",
+  };
+  var PRIORITY_WEIGHT = { critical: 100, high: 60, medium: 30, low: 10 };
+  var TYPE_WEIGHT     = { bug: 20, feature: 10, critical_feature: 25, regression: 15 };
+  var FILTER_STORAGE_KEY = "qa1-dashboard:reviewerFilter";
+
+  // ---- DOM helpers --------------------------------------------------------
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    for (var k in (attrs || {})) {
+      if (k === "class") node.className = attrs[k];
+      else if (k === "html") node.innerHTML = attrs[k];
+      else node.setAttribute(k, attrs[k]);
+    }
+    (children || []).forEach(function (c) {
+      if (c == null) return;
+      node.appendChild(typeof c === "string" ? document.createTextNode(c) : c);
+    });
+    return node;
+  }
+  function $(id) { return document.getElementById(id); }
+  function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+  function banner(kind, text) { return el("div", { class: "qa-banner " + kind }, [text]); }
+
+  // ---- Robust MCP response unwrap -----------------------------------------
+  // Cowork's window.cowork.callMcpTool can return:
+  //   (a) the structured payload directly (object)
+  //   (b) { content: [{ type: "text", text: "<json>" }], structuredContent: <obj>, isError }
+  //   (c) just the array (already unwrapped)
+  function unwrapMcp(resp) {
+    if (resp == null) return null;
+    if (typeof resp === "string") {
+      try { return JSON.parse(resp); } catch (e) { return resp; }
+    }
+    if (resp && resp.isError) return { _isError: true, _raw: resp };
+    if (resp && resp.structuredContent != null) return resp.structuredContent;
+    if (resp && Array.isArray(resp.content)) {
+      var text = resp.content
+        .filter(function (c) { return c && (c.type === "text" || typeof c.text === "string"); })
+        .map(function (c) { return c.text || ""; })
+        .join("");
+      if (text) {
+        try { return JSON.parse(text); } catch (e) { return { _rawText: text }; }
+      }
+    }
+    return resp;
+  }
+
+  // ---- Mem note parsing ---------------------------------------------------
+  function parseRunLogNote(note) {
+    var content = (note && note.content) || "";
+    var m = content.match(/```json\s*\n([\s\S]*?)\n```/);
+    if (!m) return null;
+    try { return JSON.parse(m[1]); } catch (e) { return null; }
+  }
+
+  // ---- Priority score -----------------------------------------------------
+  function priorityScore(t, runLog) {
+    var snap = (runLog && runLog.optimus_snapshot) || {};
+    var priority = (t && t.priority) || snap.priority || "medium";
+    var type     = (t && t.type)     || snap.type     || "feature";
+    var highRisk = (t && t.highRisk) || snap.highRisk || false;
+    var score = (PRIORITY_WEIGHT[String(priority).toLowerCase()] || 0) +
+                (TYPE_WEIGHT[String(type).toLowerCase()] || 0) +
+                (highRisk ? 30 : 0);
+    if (runLog && runLog.pinned_at) score += 10000;
+    return Math.round(score);
+  }
+
+  // ---- Card render --------------------------------------------------------
+  function renderCard(joined) {
+    var t = joined.optimus || {};
+    var r = joined.runLog || null;
+    var ticket = t.identifier || t.id || (r && r.ticket) || "(unknown)";
+    var title  = t.title || "(no title)";
+    var assignee = t.assignee || "—";
+    var priority = (t.priority || "—").toLowerCase();
+    var type = (t.type || "—").toLowerCase();
+    var highRisk = t.highRisk;
+
+    var badges = [];
+    badges.push(el("span", { class: "qa-badge" }, [priority]));
+    badges.push(el("span", { class: "qa-badge" }, [type]));
+    if (highRisk) badges.push(el("span", { class: "qa-badge high-risk" }, ["high-risk"]));
+    if (!r)       badges.push(el("span", { class: "qa-badge no-run" }, ["no run yet"]));
+
+    var summary = (r && r.summary) || "Awaiting first QA run — checklist will be parsed from the ticket description.";
+
+    var left = el("div", { class: "qa-card-left" }, [
+      el("div", { class: "qa-ticket-line" }, [
+        el("a", { href: "https://optimus.medtricslab.com/tasks/" + ticket, target: "_blank" }, [ticket]),
+      ]),
+      el("div", { class: "qa-title-text" }, [title]),
+      el("div", { class: "qa-badges" }, badges),
+      el("div", { class: "qa-summary" }, [summary]),
+      el("div", { class: "qa-meta" }, ["assignee: " + assignee]),
+    ]);
+
+    var rightKids = [
+      el("div", { class: "qa-score" }, [String(priorityScore(t, r))]),
+      el("div", { class: "qa-score-label" }, ["priority"]),
+    ];
+    if (r && r.checklist && r.checklist.priority_counts) {
+      var counts = r.checklist.priority_counts;
+      rightKids.push(el("div", { class: "qa-mix" }, [
+        el("span", null, ["P0 " + (counts.P0 || 0)]),
+        el("span", null, ["P1 " + (counts.P1 || 0)]),
+        el("span", null, ["P2 " + (counts.P2 || 0)]),
+      ]));
+    }
+    if (r && r.verdict)        rightKids.push(el("div", { class: "qa-verdict" }, ["verdict: " + r.verdict]));
+    if (r && r.blocked_reason) rightKids.push(el("div", { class: "qa-blocked-reason" }, ["blocked: " + r.blocked_reason]));
+    var right = el("div", { class: "qa-card-right" }, rightKids);
+
+    return el("div", { class: "qa-card" }, [left, right]);
+  }
+
+  // ---- Fetchers + extractors ---------------------------------------------
+  async function fetchOptimusRaw() {
+    return await window.cowork.callMcpTool(CONFIG.optimusListLaneTasksTool, {
+      status: CONFIG.optimusQa1Lane, product: CONFIG.optimusProduct, limit: 200,
+    });
+  }
+  async function fetchMemRaw() {
+    return await window.cowork.callMcpTool(CONFIG.memListNotesTool, {
+      collection_id: CONFIG.memRunLogsCollectionId, include_note_content: true, limit: 200,
+    });
+  }
+
+  function extractTasks(payload) {
+    if (!payload) return [];
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload.tasks))   return payload.tasks;
+    if (Array.isArray(payload.results)) return payload.results;
+    if (Array.isArray(payload.items))   return payload.items;
+    if (Array.isArray(payload.data))    return payload.data;
+    return [];
+  }
+
+  function indexRunLogs(payload) {
+    var notes = [];
+    if (Array.isArray(payload)) notes = payload;
+    else if (payload && Array.isArray(payload.results)) notes = payload.results;
+    else if (payload && Array.isArray(payload.notes))   notes = payload.notes;
+    var by = {};
+    notes.forEach(function (n) {
+      var parsed = parseRunLogNote(n);
+      if (parsed && parsed.ticket) by[parsed.ticket] = parsed;
+    });
+    return by;
+  }
+
+  function joinByTicket(tasks, runLogsByTicket) {
+    var out = [];
+    tasks.forEach(function (t) {
+      var id = t.identifier || t.id;
+      if (!id) return;
+      var r = runLogsByTicket[id] || null;
+      out.push({ optimus: t, runLog: r, state: (r && r.state) || "queued", ticket: id });
+    });
+    return out;
+  }
+
+  // ---- Reviewer filter ----------------------------------------------------
+  function populateReviewerFilter(joined) {
+    var sel = $("qa-reviewer-filter");
+    if (!sel) return;
+    var saved = "";
+    try { saved = localStorage.getItem(FILTER_STORAGE_KEY) || ""; } catch (e) {}
+    var names = {};
+    joined.forEach(function (j) {
+      var t = j.optimus || {};
+      if (t.assignee) names[t.assignee] = true;
+    });
+    var sorted = Object.keys(names).sort();
+    while (sel.options.length > 1) sel.remove(1);
+    sorted.forEach(function (n) { sel.add(new Option(n, n)); });
+    if (saved && names[saved]) sel.value = saved;
+    sel.onchange = function () {
+      try { localStorage.setItem(FILTER_STORAGE_KEY, sel.value); } catch (e) {}
+      render(LAST_JOINED);
+    };
+  }
+  function applyReviewerFilter(joined) {
+    var sel = $("qa-reviewer-filter");
+    var f = sel ? sel.value : "";
+    if (!f) return joined;
+    return joined.filter(function (j) { return (j.optimus || {}).assignee === f; });
+  }
+
+  // ---- Render -------------------------------------------------------------
+  var LAST_JOINED = [];
+
+  function render(joined) {
+    LAST_JOINED = joined;
+    var filtered = applyReviewerFilter(joined);
+
+    var counts = { in_progress: 0, queued: 0, failed: 0, blocked: 0, passed: 0 };
+    filtered.forEach(function (j) {
+      if (counts.hasOwnProperty(j.state)) counts[j.state]++;
+      else counts.queued++;
+    });
+    var stats = $("qa-stats"); clear(stats);
+    STATE_ORDER.forEach(function (s) {
+      stats.appendChild(el("div", { class: "qa-chip state-" + s }, [
+        STATE_LABEL[s] + " ", el("strong", null, [String(counts[s])]),
+      ]));
+    });
+
+    var body = $("qa-body"); clear(body);
+    var byState = {};
+    STATE_ORDER.forEach(function (s) { byState[s] = []; });
+    filtered.forEach(function (j) { (byState[j.state] || byState.queued).push(j); });
+    var rendered = 0;
+    STATE_ORDER.forEach(function (s) {
+      var arr = byState[s];
+      if (!arr.length) return;
+      arr.sort(function (a, b) { return priorityScore(b.optimus, b.runLog) - priorityScore(a.optimus, a.runLog); });
+      var section = el("div", { class: "qa-section" }, [
+        el("div", { class: "qa-section-h" }, [
+          el("h2", null, [STATE_LABEL[s]]),
+          el("span", { class: "count" }, ["(" + arr.length + ")"]),
+        ]),
+      ]);
+      arr.forEach(function (j) { section.appendChild(renderCard(j)); rendered++; });
+      body.appendChild(section);
+    });
+    if (rendered === 0) {
+      body.appendChild(el("div", { class: "qa-empty" }, ["No tickets in this view."]));
+    }
+    $("qa-updated").textContent = "updated " + new Date().toLocaleTimeString();
+  }
+
+  function showError(text) { var b = $("qa-banners"); clear(b); b.appendChild(banner("error", text)); }
+  function showWarn(text)  { $("qa-banners").appendChild(banner("warn", text)); }
+
+  async function boot() {
+    clear($("qa-banners"));
+
+    if (!window.cowork || !window.cowork.callMcpTool) {
+      showError("Cowork bridge not available — open this artifact from Cowork.");
+      return;
+    }
+
+    var tasks = [];
+    try {
+      var optimusRaw = await fetchOptimusRaw();
+      tasks = extractTasks(unwrapMcp(optimusRaw));
+    } catch (e) {
+      showError("Optimus call threw: " + (e && e.message ? e.message : String(e)));
+      return;
+    }
+
+    var runLogsByTicket = {};
+    try {
+      var memRaw = await fetchMemRaw();
+      runLogsByTicket = indexRunLogs(unwrapMcp(memRaw));
+    } catch (e) {
+      showWarn("Mem unreachable — showing Optimus data without QA enrichment.");
+    }
+
+    var joined = joinByTicket(tasks, runLogsByTicket);
+    populateReviewerFilter(joined);
+    render(joined);
+  }
+
+  $("qa-refresh").addEventListener("click", boot);
+  boot();
+})();
+</script>
+</body>
+</html>

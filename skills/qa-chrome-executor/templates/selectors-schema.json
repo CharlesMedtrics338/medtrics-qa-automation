@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://medtricslab.com/qa-automation/checklist-selectors.v1.json",
+  "title": "checklist.selectors.json (M3.2)",
+  "description": "Optional sidecar file for the UI lane. Hand-authored or future-tool-emitted, it maps checklist step IDs to structured Chrome MCP actions. Steps not listed fall back to Chrome MCP find() at runtime, so partial coverage is fine.",
+  "type": "object",
+  "required": ["version", "ticket", "branch", "steps"],
+  "properties": {
+    "version": { "type": "string", "const": "1.0" },
+    "ticket": { "type": "string", "description": "Optimus ticket id, e.g. M1-1129." },
+    "branch": { "type": "string", "description": "Branch under test." },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "generator": { "type": "string", "description": "Free-form identifier of whatever emitted the file — a script version, a tool name, or 'hand-authored'. Informational." },
+    "coverage": {
+      "type": "object",
+      "description": "Diagnostic — how many steps the generator could resolve.",
+      "properties": {
+        "resolved": { "type": "integer" },
+        "total": { "type": "integer" },
+        "ratio": { "type": "number" }
+      }
+    },
+    "steps": {
+      "type": "object",
+      "description": "Keyed by step ID (e.g. 'p0-1-step-3'). Missing keys mean 'no deterministic selector available — qa-ui-executor falls back to Chrome MCP find() at runtime'.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["kind"],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": ["navigate", "click", "fill", "wait_for_text", "assert_present", "assert_absent", "submit_form", "screenshot", "noop"]
+          },
+          "selector": {
+            "type": "string",
+            "description": "CSS selector or attribute query, e.g. '[data-testid=publish-schedule-button]' or 'button:has-text(\"Save & Publish\")'. Prefer data-testid where the codebase has them."
+          },
+          "url": { "type": "string", "description": "For 'navigate' actions. Relative path, prepended to the deploy URL by the executor." },
+          "value": { "type": "string", "description": "For 'fill' actions." },
+          "text": { "type": "string", "description": "For 'wait_for_text', 'assert_present', 'assert_absent'. May be a regex if wrapped in / / pattern." },
+          "timeout_ms": { "type": "integer", "default": 30000 },
+          "confidence": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.95 },
+          "rationale": { "type": "string", "description": "One-line why-this-action (helps debugging when the action doesn't match expectations)." }
+        }
+      }
+    }
+  },
+  "examples": [
+    {
+      "version": "1.0",
+      "ticket": "M1-1129",
+      "branch": "fix/m1-1129/curriculum-import-csv-template-encoding",
+      "generated_at": "2026-05-27T09:12:00Z",
+      "generator": "hand-authored",
+      "coverage": { "resolved": 6, "total": 8, "ratio": 0.75 },
+      "steps": {
+        "p0-1-step-1": {
+          "kind": "navigate",
+          "url": "/curriculum/imports/",
+          "rationale": "Resolved from urls.py route 'curriculum-imports'."
+        },
+        "p0-1-step-2": {
+          "kind": "click",
+          "selector": "[data-testid=download-csv-template]",
+          "rationale": "Resolved from template templates/curriculum/imports/list.html."
+        },
+        "p0-1-step-3": {
+          "kind": "assert_absent",
+          "text": "\\u00c3\\u00a9",
+          "rationale": "Asserting no double-encoded characters in the downloaded CSV."
+        }
+      }
+    }
+  ]
+}

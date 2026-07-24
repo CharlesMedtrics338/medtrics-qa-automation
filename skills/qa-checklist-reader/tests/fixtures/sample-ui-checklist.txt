@@ -1,0 +1,22 @@
+Manual QA Checklist
+Branch under test: fix/m1-1190/block-schedule-date-off-by-one
+Tester role: coordinator
+
+Scope Summary
+- Block schedule was displaying dates one day earlier than entered.
+- Change touches the schedule serializer and the schedule list template.
+
+What to do first
+- Log in as a curriculum coordinator on the deploy.
+
+Numbered test steps
+1. [P0] Navigate to Curriculum > Block Schedule for the Internal Medicine program.
+   Expected: The Block Schedule page loads without errors.
+2. [P0] Create a block starting 2026-05-12 and save it.
+   Expected: The saved block shows the date 2026-05-12, not 2026-05-11.
+3. [P1] Open the block schedule list view.
+   Expected: Displays "Internal Medicine" and shows no console error.
+4. Re-open the saved block in edit mode.
+   Expected: Field "start_date" equals "2026-05-12".
+5. [P2] Hover the info tooltip on the date column.
+   Expected: Looks correct.

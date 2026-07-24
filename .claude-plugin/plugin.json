@@ -1,0 +1,24 @@
+{
+  "name": "medtrics-qa-automation",
+  "version": "0.12.2",
+  "description": "Automated QA1 for Medtrics. Reads a human-authored QA Checklist from the Optimus ticket or its GitLab MR, walks each step via Chrome MCP, judges every step by code, captures per-step screenshots + console + network as visual evidence, and posts verdict threads with a plain-English summary plus inline screenshots so QA2 reviewers can audit a run without re-driving the browser. Moves the Optimus ticket per the verdict policy. Phase-gated; shadow by default.",
+  "author": {
+    "name": "Charles Norris",
+    "email": "charles@medtricslab.com"
+  },
+  "keywords": [
+    "medtrics",
+    "qa",
+    "automation",
+    "testing",
+    "chrome",
+    "agentic",
+    "optimus",
+    "gitlab",
+    "merge-request",
+    "fail-thread",
+    "screenshot",
+    "ui-ux",
+    "guardrails"
+  ]
+}

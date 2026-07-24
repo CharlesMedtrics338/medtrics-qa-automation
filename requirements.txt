@@ -1,0 +1,21 @@
+# medtrics-qa-automation — runtime dependencies
+#
+# Almost everything in this plugin is stdlib. The only third-party runtime
+# import is PyYAML, used by skills/qa-chrome-executor/scripts/scenario_dispatcher.py
+# to parse qa/scenario-matrix.yaml (the deterministic API-lane rule set).
+#
+# scenario_dispatcher.py degrades gracefully when PyYAML is absent (sets
+# `yaml = None` and refuses to load the matrix). Skipping this install will
+# disable the API lane but leave the UI lane and the GitLab/Optimus/Mem
+# substrate fully functional.
+#
+# Install:
+#   pip install -r requirements.txt
+#   # or, when system Python rejects the install:
+#   pip install -r requirements.txt --break-system-packages
+#
+# Compatible with Python 3.10+. The stdlib-only scripts go back further
+# (3.8+) but the type-annotation syntax across the plugin uses 3.10 union
+# operators (`str | None`).
+
+PyYAML>=6.0
