@@ -1,7 +1,19 @@
 # medtrics-qa-automation
 
-Automated QA1 and bi-weekly regression for Medtrics. Implements the QA Process
+Automated QA1 and bi-weekly regression for Medtrics (Claude Code / Cowork & Cursor plugin). Implements the QA Process
 v2.2 contract.
+
+## Plugin & Marketplace Manifests
+
+The plugin is structured for dual distribution across Claude Code / Cowork and Cursor:
+
+- **Claude Plugin:**
+  - `.claude-plugin/plugin.json` — plugin metadata and capability paths.
+  - `.claude-plugin/marketplace.json` — marketplace catalog entry for Claude marketplace publishing.
+- **Cursor Plugin:**
+  - `.cursor-plugin/plugin.json` & `.cursor-plugin/manifest.json` — Cursor plugin manifest mapping skills and slash commands.
+  - `.cursor-plugin/marketplace.json` — Cursor marketplace catalog entry.
+  - `manifest.json` — root manifest for direct Cursor plugin packaging and upload tooling.
 
 ## Status — v0.10.2
 
