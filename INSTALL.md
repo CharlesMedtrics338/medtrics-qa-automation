@@ -1,6 +1,6 @@
 # medtrics-qa-automation — install / use
 
-A Claude Code / Cowork plugin: automated QA1 against per-MR deploys. The plugin
+A Claude Code / Cowork & Cursor plugin: automated QA1 against per-MR deploys. The plugin
 **reads** a human-authored `## QA Checklist` section from the Optimus ticket,
 matches against a deterministic scenario matrix, falls back to driving Claude
 in Chrome through the checklist steps when no matrix rule fires, and judges
@@ -50,6 +50,12 @@ Save the `.plugin` file from this archive's parent dir and click the install
 button presented by the chat interface, or drop the file into your Cowork
 plugins folder. Then `pip install -r requirements.txt` from wherever the
 plugin unpacks (Cowork shows the path in the install confirmation).
+
+## Install (Cursor)
+
+1. In Cursor, open **Settings → Plugins / Extensions**.
+2. Select **Install from local directory** or upload package pointing to the repository containing `.cursor-plugin/` and `manifest.json`.
+3. Verify slash commands and skills load from `./commands/` and `./skills/`.
 
 ## First-run setup
 
